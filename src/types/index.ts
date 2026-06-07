@@ -365,6 +365,7 @@ export interface ProductUnavailableDate {
 // 상품 생성 입력
 export interface ProductCreateInput {
   business_owner_id: string
+  business_id?: string
   category_id?: string
   name: string
   summary?: string
@@ -387,6 +388,7 @@ export interface ProductCreateInput {
 
 // 상품 수정 입력
 export interface ProductUpdateInput {
+  business_id?: string | null
   category_id?: string | null
   name?: string
   summary?: string | null

@@ -42,6 +42,7 @@ import type { RcFile } from 'antd/es/upload/interface'
 import dayjs from 'dayjs'
 
 import { getBusinessOwners, getCategories } from '@/services/productService'
+import { getBusinessesByVendor } from '@/services/businessService'
 import { uploadProductImage, uploadImage } from '@/services/storageService'
 import { REGION_CASCADER_OPTIONS, DAY_OF_WEEK_LABEL, TIME_SLOT_INTERVAL_OPTIONS } from '@/constants'
 import type { Product, TimeSlot, TimeSlotMode, TimeSlotInterval, Category } from '@/types'
@@ -247,6 +248,26 @@ export function ProductForm({
     queryKey: ['businessOwners'],
     queryFn: getBusinessOwners,
   })
+
+  // 선택된 사업주의 사업장 목록
+  const selectedVendorId = Form.useWatch('business_owner_id', form)
+  const { data: businesses } = useQuery({
+    queryKey: ['businessesByVendor', selectedVendorId],
+    queryFn: () => getBusinessesByVendor(selectedVendorId!),
+    enabled: !!selectedVendorId,
+  })
+
+  // 사업장 선택 시 주소/지역을 사업장 기준으로 채움 (전환기: 상품 주소는 사업장에서 상속)
+  const handleBusinessChange = (businessId: string) => {
+    const biz = businesses?.find((b) => b.id === businessId)
+    if (biz) {
+      form.setFieldsValue({
+        address: biz.address ?? undefined,
+        address_detail: biz.address_detail ?? undefined,
+        region: biz.region ?? undefined,
+      })
+    }
+  }
 
   // 카테고리 목록 (계층 구조)
   const { data: categories } = useQuery({
@@ -580,6 +601,24 @@ export function ProductForm({
               optionFilterProp="label"
               disabled={isEdit}
               options={vendors?.map((v) => ({ value: v.id, label: v.name })) || []}
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="business_id"
+            label="사업장"
+            rules={[{ required: true, message: '사업장을 선택하세요' }]}
+            extra="상품이 속한 사업장(장소). 선택 시 주소/지역이 사업장 기준으로 채워집니다."
+          >
+            <Select
+              placeholder={selectedVendorId ? '사업장 선택' : '먼저 사업주를 선택하세요'}
+              style={{ width: 280 }}
+              showSearch
+              optionFilterProp="label"
+              disabled={!selectedVendorId}
+              onChange={handleBusinessChange}
+              options={businesses?.map((b) => ({ value: b.id, label: b.name })) || []}
+              notFoundContent={selectedVendorId ? '등록된 사업장이 없습니다' : null}
             />
           </Form.Item>
 
