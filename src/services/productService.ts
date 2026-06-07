@@ -121,7 +121,7 @@ export async function getProduct(id: string): Promise<Product> {
 
 // 상품 생성
 export async function createProduct(input: ProductCreateInput): Promise<Product> {
-  const { options, images, available_time_slots, unavailable_dates, ...productData } = input
+  const { options, images, available_time_slots, unavailable_dates, product_schedules, ...productData } = input
 
   // 상품 생성
   const { data: product, error: productError } = await supabase
@@ -198,6 +198,25 @@ export async function createProduct(input: ProductCreateInput): Promise<Product>
     }
   }
 
+  // 요일별 스케줄 생성 (판매방식: time_slot=슬롯별 capacity1 / quantity=요일별 수량 / daily_one=요일별 capacity1)
+  if (product_schedules && product_schedules.length > 0) {
+    const schedulesData = product_schedules.map((s) => ({
+      product_id: product.id,
+      day_of_week: s.day_of_week,
+      slot_time: s.slot_time,
+      capacity: s.capacity,
+      is_active: true,
+    }))
+    const { error: schedulesError } = await supabase.from('product_schedules').insert(schedulesData)
+    if (schedulesError) {
+      await supabase.from('product_schedules').delete().eq('product_id', product.id)
+      await supabase.from('product_images').delete().eq('product_id', product.id)
+      await supabase.from('product_options').delete().eq('product_id', product.id)
+      await supabase.from('products').delete().eq('id', product.id)
+      throw new Error(schedulesError.message)
+    }
+  }
+
   // 활동 로그 기록
   await logCreate('product', product.id, product as Record<string, unknown>)
 
@@ -206,7 +225,7 @@ export async function createProduct(input: ProductCreateInput): Promise<Product>
 
 // 상품 수정
 export async function updateProduct(id: string, input: ProductUpdateInput): Promise<Product> {
-  const { options, images, available_time_slots, unavailable_dates, ...productData } = input
+  const { options, images, available_time_slots, unavailable_dates, product_schedules, ...productData } = input
 
   // 변경 전 데이터 조회
   const { data: beforeData } = await supabase
@@ -289,6 +308,25 @@ export async function updateProduct(id: string, input: ProductUpdateInput): Prom
 
       if (unavailableDatesError) {
         throw new Error(unavailableDatesError.message)
+      }
+    }
+  }
+
+  // 요일별 스케줄 업데이트 (기존 삭제 후 재생성)
+  if (product_schedules !== undefined) {
+    await supabase.from('product_schedules').delete().eq('product_id', id)
+
+    if (product_schedules && product_schedules.length > 0) {
+      const schedulesData = product_schedules.map((s) => ({
+        product_id: id,
+        day_of_week: s.day_of_week,
+        slot_time: s.slot_time,
+        capacity: s.capacity,
+        is_active: true,
+      }))
+      const { error: schedulesError } = await supabase.from('product_schedules').insert(schedulesData)
+      if (schedulesError) {
+        throw new Error(schedulesError.message)
       }
     }
   }

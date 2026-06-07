@@ -363,9 +363,27 @@ export interface ProductUnavailableDate {
 }
 
 // 상품 생성 입력
+// 판매방식
+export type SaleType = 'daily_one' | 'time_slot' | 'quantity'
+
+export const SALE_TYPE_LABEL: Record<SaleType, string> = {
+  daily_one: '당일 1건',
+  time_slot: '시간대별',
+  quantity: '개수별',
+}
+
+// 요일별 스케줄/정원 (product_schedules)
+export interface ProductScheduleInput {
+  day_of_week: number // 0(일)~6(토)
+  slot_time: string | null // 'HH:mm', time_slot만 사용
+  capacity: number // time_slot=1, quantity=수량, daily_one=1
+}
+
 export interface ProductCreateInput {
   business_owner_id: string
   business_id?: string
+  sale_type?: SaleType
+  product_schedules?: ProductScheduleInput[]
   category_id?: string
   name: string
   summary?: string
@@ -389,6 +407,8 @@ export interface ProductCreateInput {
 // 상품 수정 입력
 export interface ProductUpdateInput {
   business_id?: string | null
+  sale_type?: SaleType
+  product_schedules?: ProductScheduleInput[]
   category_id?: string | null
   name?: string
   summary?: string | null

@@ -45,7 +45,7 @@ import { getBusinessOwners, getCategories } from '@/services/productService'
 import { getBusinessesByVendor } from '@/services/businessService'
 import { uploadProductImage, uploadImage } from '@/services/storageService'
 import { REGION_CASCADER_OPTIONS, DAY_OF_WEEK_LABEL, TIME_SLOT_INTERVAL_OPTIONS } from '@/constants'
-import type { Product, TimeSlot, TimeSlotMode, TimeSlotInterval, Category } from '@/types'
+import type { Product, TimeSlot, TimeSlotMode, TimeSlotInterval, Category, SaleType, ProductScheduleInput } from '@/types'
 
 const { Text } = Typography
 
@@ -107,6 +107,7 @@ interface TimeSlotItem {
   mode: TimeSlotMode
   interval: TimeSlotInterval
   customSlots: string[]
+  capacity: number // 개수별(quantity) 판매방식의 요일별 수량
 }
 
 export function ProductForm({
@@ -206,6 +207,7 @@ export function ProductForm({
       mode: 'auto' as TimeSlotMode,
       interval: 60 as TimeSlotInterval,
       customSlots: [],
+      capacity: initialValues?.max_participants ?? 10,
     }))
 
     if (initialValues?.available_time_slots) {
@@ -256,6 +258,9 @@ export function ProductForm({
     queryFn: () => getBusinessesByVendor(selectedVendorId!),
     enabled: !!selectedVendorId,
   })
+
+  // 판매방식
+  const saleType = (Form.useWatch('sale_type', form) ?? 'time_slot') as SaleType
 
   // 사업장 선택 시 주소/지역을 사업장 기준으로 채움 (전환기: 상품 주소는 사업장에서 상속)
   const handleBusinessChange = (businessId: string) => {
@@ -493,6 +498,21 @@ export function ProductForm({
       // category_path는 제외하고 category_id 추가
       const { category_path: _categoryPath, ...restValues } = values
 
+      // 판매방식별 요일 스케줄 생성 (day_of_week 0~6 = JS getDay = Postgres DOW)
+      const saleTypeVal = (values.sale_type as SaleType) || 'time_slot'
+      const productSchedules: ProductScheduleInput[] = timeSlots
+        .filter((s) => s.enabled)
+        .flatMap((s): ProductScheduleInput[] => {
+          if (saleTypeVal === 'time_slot') {
+            const times = s.mode === 'custom' ? s.customSlots : generateTimeSlots(s.start, s.end, s.interval)
+            return times.map((t) => ({ day_of_week: s.day, slot_time: t, capacity: 1 }))
+          }
+          if (saleTypeVal === 'quantity') {
+            return [{ day_of_week: s.day, slot_time: null, capacity: s.capacity }]
+          }
+          return [{ day_of_week: s.day, slot_time: null, capacity: 1 }] // daily_one
+        })
+
       onSubmit({
         ...restValues,
         category_id,
@@ -501,6 +521,7 @@ export function ProductForm({
         options: productOptions,
         available_time_slots: availableTimeSlots.length > 0 ? availableTimeSlots : null,
         unavailable_dates: unavailableDates.length > 0 ? unavailableDates : null,
+        product_schedules: productSchedules,
       })
     } catch {
       // validation error
@@ -571,6 +592,7 @@ export function ProductForm({
           ...initialValues,
           min_participants: initialValues?.min_participants ?? 1,
           is_visible: initialValues?.is_visible ?? true,
+          sale_type: (initialValues as { sale_type?: SaleType })?.sale_type ?? 'time_slot',
         }}
         style={{ width: '100%' }}
         className="compact-form"
@@ -932,11 +954,28 @@ export function ProductForm({
         <Card style={{ marginBottom: 24 }}>
           <SectionHeader
             icon={<ClockCircleOutlined />}
-            title="운영 시간"
-            description="요일별 운영 시간을 설정해주세요"
+            title="판매방식 · 운영 요일"
+            description="판매방식에 따라 요일별 시간대 또는 수량을 설정합니다"
           />
 
-          {/* 벌크 수정 영역 */}
+          <Form.Item name="sale_type" label="판매방식" rules={[{ required: true }]}>
+            <Radio.Group
+              optionType="button"
+              options={[
+                { value: 'daily_one', label: '당일 1건' },
+                { value: 'time_slot', label: '시간대별' },
+                { value: 'quantity', label: '개수별' },
+              ]}
+            />
+          </Form.Item>
+          <div style={{ marginBottom: 16, fontSize: 13, color: '#888' }}>
+            {saleType === 'daily_one' && '· 운영 요일만 선택하세요. 해당 날짜에 예약 1건이 차면 마감됩니다.'}
+            {saleType === 'time_slot' && '· 요일별 예약 시간대를 설정하세요. 각 시간대(회차)는 1팀이 차면 마감됩니다.'}
+            {saleType === 'quantity' && '· 요일별 판매 수량을 설정하세요. 예약 인원수만큼 차감되고 잔여 수량이 노출됩니다.'}
+          </div>
+
+          {/* 벌크 수정 영역 (시간대별만) */}
+          {saleType === 'time_slot' && (
           <div style={{ marginBottom: 16, padding: 12, background: '#fafafa', borderRadius: 6 }}>
             <Row gutter={16} align="middle" style={{ marginBottom: 8 }}>
               <Col>
@@ -1104,6 +1143,7 @@ export function ProductForm({
               </Row>
             </div>
           </div>
+          )}
 
           {timeSlots.map((slot) => (
             <div
@@ -1125,34 +1165,53 @@ export function ProductForm({
                     <Text strong={slot.enabled}>{DAY_OF_WEEK_LABEL[slot.day]}</Text>
                   </Checkbox>
                 </Col>
-                <Col>
-                  <TimePicker
-                    value={dayjs(slot.start, 'HH:mm')}
-                    format="HH:mm"
-                    minuteStep={30}
-                    disabled={!slot.enabled}
-                    onChange={(time) =>
-                      updateTimeSlot(slot.day, 'start', time?.format('HH:mm') || '09:00')
-                    }
-                    size="small"
-                  />
-                </Col>
-                <Col>~</Col>
-                <Col>
-                  <TimePicker
-                    value={dayjs(slot.end, 'HH:mm')}
-                    format="HH:mm"
-                    minuteStep={30}
-                    disabled={!slot.enabled}
-                    onChange={(time) =>
-                      updateTimeSlot(slot.day, 'end', time?.format('HH:mm') || '18:00')
-                    }
-                    size="small"
-                  />
-                </Col>
+                {saleType === 'time_slot' && (
+                  <>
+                    <Col>
+                      <TimePicker
+                        value={dayjs(slot.start, 'HH:mm')}
+                        format="HH:mm"
+                        minuteStep={30}
+                        disabled={!slot.enabled}
+                        onChange={(time) =>
+                          updateTimeSlot(slot.day, 'start', time?.format('HH:mm') || '09:00')
+                        }
+                        size="small"
+                      />
+                    </Col>
+                    <Col>~</Col>
+                    <Col>
+                      <TimePicker
+                        value={dayjs(slot.end, 'HH:mm')}
+                        format="HH:mm"
+                        minuteStep={30}
+                        disabled={!slot.enabled}
+                        onChange={(time) =>
+                          updateTimeSlot(slot.day, 'end', time?.format('HH:mm') || '18:00')
+                        }
+                        size="small"
+                      />
+                    </Col>
+                  </>
+                )}
+                {saleType === 'quantity' && slot.enabled && (
+                  <Col>
+                    <Space size="small">
+                      <Text type="secondary" style={{ fontSize: 13 }}>판매 수량:</Text>
+                      <InputNumber
+                        min={1}
+                        value={slot.capacity}
+                        onChange={(v) => updateTimeSlot(slot.day, 'capacity', v ?? 1)}
+                        size="small"
+                        style={{ width: 90 }}
+                        addonAfter="개"
+                      />
+                    </Space>
+                  </Col>
+                )}
               </Row>
 
-              {slot.enabled && (
+              {saleType === 'time_slot' && slot.enabled && (
                 <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px dashed #e8e8e8' }}>
                   <Row gutter={16} align="middle">
                     <Col>
