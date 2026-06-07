@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.1"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -178,6 +178,44 @@ export type Database = {
         }
         Relationships: []
       }
+      business_holidays: {
+        Row: {
+          business_id: string
+          created_at: string
+          day_of_week: number | null
+          holiday_date: string | null
+          id: string
+          is_recurring: boolean
+          reason: string | null
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          day_of_week?: number | null
+          holiday_date?: string | null
+          id?: string
+          is_recurring?: boolean
+          reason?: string | null
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          day_of_week?: number | null
+          holiday_date?: string | null
+          id?: string
+          is_recurring?: boolean
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_holidays_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       business_owner_documents: {
         Row: {
           business_owner_id: string
@@ -297,6 +335,68 @@ export type Database = {
         }
         Relationships: []
       }
+      businesses: {
+        Row: {
+          address: string | null
+          address_detail: string | null
+          business_owner_id: string
+          contact_phone: string | null
+          created_at: string
+          id: string
+          intro: string | null
+          is_visible: boolean
+          latitude: number | null
+          longitude: number | null
+          name: string
+          region: string | null
+          thumbnail: string | null
+          updated_at: string
+          zipcode: string | null
+        }
+        Insert: {
+          address?: string | null
+          address_detail?: string | null
+          business_owner_id: string
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          intro?: string | null
+          is_visible?: boolean
+          latitude?: number | null
+          longitude?: number | null
+          name: string
+          region?: string | null
+          thumbnail?: string | null
+          updated_at?: string
+          zipcode?: string | null
+        }
+        Update: {
+          address?: string | null
+          address_detail?: string | null
+          business_owner_id?: string
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          intro?: string | null
+          is_visible?: boolean
+          latitude?: number | null
+          longitude?: number | null
+          name?: string
+          region?: string | null
+          thumbnail?: string | null
+          updated_at?: string
+          zipcode?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "businesses_business_owner_id_fkey"
+            columns: ["business_owner_id"]
+            isOneToOne: false
+            referencedRelation: "business_owners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       carts: {
         Row: {
           created_at: string
@@ -388,6 +488,64 @@ export type Database = {
             columns: ["parent_id"]
             isOneToOne: false
             referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      change_requests: {
+        Row: {
+          business_id: string
+          changes: Json
+          created_at: string
+          id: string
+          reject_reason: string | null
+          requested_by: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: Database["public"]["Enums"]["change_request_status"]
+        }
+        Insert: {
+          business_id: string
+          changes: Json
+          created_at?: string
+          id?: string
+          reject_reason?: string | null
+          requested_by?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["change_request_status"]
+        }
+        Update: {
+          business_id?: string
+          changes?: Json
+          created_at?: string
+          id?: string
+          reject_reason?: string | null
+          requested_by?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: Database["public"]["Enums"]["change_request_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "change_requests_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "change_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "business_owners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "change_requests_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "admins"
             referencedColumns: ["id"]
           },
         ]
@@ -1123,32 +1281,79 @@ export type Database = {
           },
         ]
       }
+      product_schedules: {
+        Row: {
+          capacity: number | null
+          created_at: string
+          day_of_week: number | null
+          id: string
+          is_active: boolean
+          product_id: string
+          slot_time: string | null
+        }
+        Insert: {
+          capacity?: number | null
+          created_at?: string
+          day_of_week?: number | null
+          id?: string
+          is_active?: boolean
+          product_id: string
+          slot_time?: string | null
+        }
+        Update: {
+          capacity?: number | null
+          created_at?: string
+          day_of_week?: number | null
+          id?: string
+          is_active?: boolean
+          product_id?: string
+          slot_time?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_schedules_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_unavailable_dates: {
         Row: {
+          capacity_override: number | null
           created_at: string
           day_of_week: number | null
           id: string
           is_recurring: boolean
+          kind: Database["public"]["Enums"]["product_unavailable_kind"]
           product_id: string
           reason: string | null
+          slot_time: string | null
           unavailable_date: string
         }
         Insert: {
+          capacity_override?: number | null
           created_at?: string
           day_of_week?: number | null
           id?: string
           is_recurring?: boolean
+          kind?: Database["public"]["Enums"]["product_unavailable_kind"]
           product_id: string
           reason?: string | null
+          slot_time?: string | null
           unavailable_date: string
         }
         Update: {
+          capacity_override?: number | null
           created_at?: string
           day_of_week?: number | null
           id?: string
           is_recurring?: boolean
+          kind?: Database["public"]["Enums"]["product_unavailable_kind"]
           product_id?: string
           reason?: string | null
+          slot_time?: string | null
           unavailable_date?: string
         }
         Relationships: [
@@ -1166,6 +1371,7 @@ export type Database = {
           address: string | null
           address_detail: string | null
           available_time_slots: Json | null
+          business_id: string | null
           business_owner_id: string
           category_id: string | null
           created_at: string
@@ -1182,6 +1388,7 @@ export type Database = {
           original_price: number
           region: string | null
           sale_price: number
+          sale_type: Database["public"]["Enums"]["product_sale_type"]
           summary: string | null
           thumbnail: string
           updated_at: string
@@ -1191,6 +1398,7 @@ export type Database = {
           address?: string | null
           address_detail?: string | null
           available_time_slots?: Json | null
+          business_id?: string | null
           business_owner_id: string
           category_id?: string | null
           created_at?: string
@@ -1207,6 +1415,7 @@ export type Database = {
           original_price: number
           region?: string | null
           sale_price: number
+          sale_type?: Database["public"]["Enums"]["product_sale_type"]
           summary?: string | null
           thumbnail: string
           updated_at?: string
@@ -1216,6 +1425,7 @@ export type Database = {
           address?: string | null
           address_detail?: string | null
           available_time_slots?: Json | null
+          business_id?: string | null
           business_owner_id?: string
           category_id?: string | null
           created_at?: string
@@ -1232,12 +1442,20 @@ export type Database = {
           original_price?: number
           region?: string | null
           sale_price?: number
+          sale_type?: Database["public"]["Enums"]["product_sale_type"]
           summary?: string | null
           thumbnail?: string
           updated_at?: string
           view_count?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "products_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "products_business_owner_id_fkey"
             columns: ["business_owner_id"]
@@ -1404,24 +1622,30 @@ export type Database = {
           daycare_id: string
           expires_at: string
           id: string
+          participant_count: number
           product_id: string
           reserved_date: string
+          slot_time: string | null
         }
         Insert: {
           created_at?: string
           daycare_id: string
           expires_at?: string
           id?: string
+          participant_count?: number
           product_id: string
           reserved_date: string
+          slot_time?: string | null
         }
         Update: {
           created_at?: string
           daycare_id?: string
           expires_at?: string
           id?: string
+          participant_count?: number
           product_id?: string
           reserved_date?: string
+          slot_time?: string | null
         }
         Relationships: [
           {
@@ -1826,7 +2050,9 @@ export type Database = {
       send_alimtalk_http: { Args: { p_body: string }; Returns: Json }
     }
     Enums: {
-      [_ in never]: never
+      change_request_status: "pending" | "approved" | "rejected"
+      product_sale_type: "daily_one" | "time_slot" | "quantity"
+      product_unavailable_kind: "closed" | "capacity"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1953,6 +2179,10 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      change_request_status: ["pending", "approved", "rejected"],
+      product_sale_type: ["daily_one", "time_slot", "quantity"],
+      product_unavailable_kind: ["closed", "capacity"],
+    },
   },
 } as const

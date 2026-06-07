@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Tabs,
+  Card,
   Descriptions,
   Button,
   Tag,
@@ -33,10 +34,112 @@ import {
   updateCommissionRate,
   getVendorDocuments,
 } from '@/services/vendorService'
+import { getBusinessesByVendor, getProductsByBusiness } from '@/services/businessService'
+import type { Business, BusinessProduct } from '@/services/businessService'
 import { useAuthStore } from '@/stores/authStore'
 import { formatPhoneNumber } from '@/utils/format'
 import { VENDOR_STATUS_LABEL, DATE_FORMAT, DEFAULT_PAGE_SIZE } from '@/constants'
 import type { Settlement, CommissionHistory, SettlementStatus, BusinessOwnerDocument } from '@/types'
+
+const SALE_TYPE_LABEL: Record<string, string> = {
+  daily_one: '당일 1건',
+  time_slot: '시간대별',
+  quantity: '개수별',
+}
+
+// 사업장에 속한 상품 테이블 (행 클릭 → 상품 상세)
+function BusinessProductsTable({ businessId }: { businessId: string }) {
+  const navigate = useNavigate()
+  const { data: products = [], isLoading } = useQuery({
+    queryKey: ['businessProducts', businessId],
+    queryFn: () => getProductsByBusiness(businessId),
+  })
+
+  const columns: ColumnsType<BusinessProduct> = [
+    { title: '상품명', dataIndex: 'name', key: 'name' },
+    { title: '카테고리', key: 'category', render: (_, r) => r.category?.name || '-' },
+    {
+      title: '판매방식',
+      dataIndex: 'sale_type',
+      key: 'sale_type',
+      render: (v: string) => SALE_TYPE_LABEL[v] || v,
+    },
+    {
+      title: '판매가',
+      dataIndex: 'sale_price',
+      key: 'sale_price',
+      render: (v: number) => `${(v ?? 0).toLocaleString()}원`,
+    },
+    {
+      title: '상태',
+      key: 'status',
+      render: (_, r) =>
+        r.is_sold_out ? <Tag color="red">품절</Tag> : r.is_visible ? <Tag color="green">노출</Tag> : <Tag>숨김</Tag>,
+    },
+  ]
+
+  return (
+    <Table
+      columns={columns}
+      dataSource={products}
+      rowKey="id"
+      size="small"
+      bordered
+      loading={isLoading}
+      pagination={false}
+      locale={{ emptyText: '등록된 상품이 없습니다' }}
+      onRow={(record) => ({
+        onClick: () => navigate(`/products/${record.id}`),
+        style: { cursor: 'pointer' },
+      })}
+    />
+  )
+}
+
+// 사업주 상세 - '상품 관리' 탭 (사업장 → 상품 계층)
+function VendorBusinessesTab({ vendorId }: { vendorId: string }) {
+  const { data: businesses = [], isLoading } = useQuery({
+    queryKey: ['vendorBusinesses', vendorId],
+    queryFn: () => getBusinessesByVendor(vendorId),
+  })
+
+  if (isLoading) {
+    return (
+      <div style={{ textAlign: 'center', padding: 24 }}>
+        <Spin />
+      </div>
+    )
+  }
+
+  if (businesses.length === 0) {
+    return (
+      <div style={{ padding: 16, background: '#fafafa', borderRadius: 6 }}>
+        <Typography.Text type="secondary">등록된 사업장이 없습니다</Typography.Text>
+      </div>
+    )
+  }
+
+  return (
+    <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      {businesses.map((biz: Business) => (
+        <Card key={biz.id} size="small">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+            <ShopOutlined style={{ color: '#1677ff' }} />
+            <Typography.Text strong style={{ fontSize: 15 }}>
+              {biz.name}
+            </Typography.Text>
+            <Tag color={biz.is_visible ? 'green' : 'default'}>{biz.is_visible ? '노출' : '숨김'}</Tag>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {biz.address}
+              {biz.address_detail ? ` ${biz.address_detail}` : ''}
+            </Typography.Text>
+          </div>
+          <BusinessProductsTable businessId={biz.id} />
+        </Card>
+      ))}
+    </Space>
+  )
+}
 
 export function VendorDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -321,6 +424,11 @@ export function VendorDetailPage() {
           )}
         </>
       ),
+    },
+    {
+      key: 'products',
+      label: '상품 관리',
+      children: <VendorBusinessesTab vendorId={id!} />,
     },
     {
       key: 'settlements',

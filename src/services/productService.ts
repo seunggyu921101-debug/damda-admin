@@ -454,7 +454,7 @@ export async function getAllProducts(): Promise<Product[]> {
     throw new Error(error.message)
   }
 
-  return (data as Product[]) || []
+  return (data as unknown as Product[]) || []
 }
 
 // 상품 대량 생성 (엑셀 업로드용) - 레거시, upsertProductsBulk 사용 권장
