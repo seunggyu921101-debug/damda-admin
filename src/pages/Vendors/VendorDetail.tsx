@@ -21,7 +21,7 @@ import {
   List,
   Typography,
 } from 'antd'
-import { ArrowLeftOutlined, EditOutlined, ShopOutlined, FileOutlined, FilePdfOutlined, FileImageOutlined, LockOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, EditOutlined, ShopOutlined, FileOutlined, FilePdfOutlined, FileImageOutlined, LockOutlined, PlusOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 
@@ -34,8 +34,8 @@ import {
   updateCommissionRate,
   getVendorDocuments,
 } from '@/services/vendorService'
-import { getBusinessesByVendor, getProductsByBusiness } from '@/services/businessService'
-import type { Business, BusinessProduct } from '@/services/businessService'
+import { getBusinessesByVendor, getProductsByBusiness, createBusiness, updateBusiness } from '@/services/businessService'
+import type { Business, BusinessProduct, BusinessInsert, BusinessUpdate } from '@/services/businessService'
 import { useAuthStore } from '@/stores/authStore'
 import { formatPhoneNumber } from '@/utils/format'
 import { VENDOR_STATUS_LABEL, DATE_FORMAT, DEFAULT_PAGE_SIZE } from '@/constants'
@@ -96,48 +96,137 @@ function BusinessProductsTable({ businessId }: { businessId: string }) {
   )
 }
 
-// 사업주 상세 - '상품 관리' 탭 (사업장 → 상품 계층)
+// 사업주 상세 - '상품 관리' 탭 (사업장 → 상품 계층, 사업장 등록/수정 포함)
 function VendorBusinessesTab({ vendorId }: { vendorId: string }) {
+  const queryClient = useQueryClient()
   const { data: businesses = [], isLoading } = useQuery({
     queryKey: ['vendorBusinesses', vendorId],
     queryFn: () => getBusinessesByVendor(vendorId),
   })
 
-  if (isLoading) {
-    return (
-      <div style={{ textAlign: 'center', padding: 24 }}>
-        <Spin />
-      </div>
-    )
-  }
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editing, setEditing] = useState<Business | null>(null)
+  const [bizForm] = Form.useForm()
 
-  if (businesses.length === 0) {
-    return (
-      <div style={{ padding: 16, background: '#fafafa', borderRadius: 6 }}>
-        <Typography.Text type="secondary">등록된 사업장이 없습니다</Typography.Text>
-      </div>
-    )
+  const saveMutation = useMutation({
+    mutationFn: (values: Record<string, unknown>) =>
+      editing
+        ? updateBusiness(editing.id, values as BusinessUpdate)
+        : createBusiness({ business_owner_id: vendorId, ...values } as BusinessInsert),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vendorBusinesses', vendorId] })
+      message.success(editing ? '사업장이 수정되었습니다' : '사업장이 등록되었습니다')
+      setModalOpen(false)
+      bizForm.resetFields()
+      setEditing(null)
+    },
+    onError: (e: Error) => message.error(e.message),
+  })
+
+  const openCreate = () => {
+    setEditing(null)
+    bizForm.resetFields()
+    bizForm.setFieldsValue({ is_visible: true })
+    setModalOpen(true)
+  }
+  const openEdit = (biz: Business) => {
+    setEditing(biz)
+    bizForm.setFieldsValue(biz)
+    setModalOpen(true)
+  }
+  const handleSubmit = async () => {
+    try {
+      const values = await bizForm.validateFields()
+      saveMutation.mutate(values)
+    } catch {
+      // validation error
+    }
   }
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      {businesses.map((biz: Business) => (
-        <Card key={biz.id} size="small">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-            <ShopOutlined style={{ color: '#1677ff' }} />
-            <Typography.Text strong style={{ fontSize: 15 }}>
-              {biz.name}
-            </Typography.Text>
-            <Tag color={biz.is_visible ? 'green' : 'default'}>{biz.is_visible ? '노출' : '숨김'}</Tag>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {biz.address}
-              {biz.address_detail ? ` ${biz.address_detail}` : ''}
-            </Typography.Text>
-          </div>
-          <BusinessProductsTable businessId={biz.id} />
-        </Card>
-      ))}
-    </Space>
+    <>
+      <div style={{ marginBottom: 12, textAlign: 'right' }}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+          사업장 등록
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div style={{ textAlign: 'center', padding: 24 }}>
+          <Spin />
+        </div>
+      ) : businesses.length === 0 ? (
+        <div style={{ padding: 16, background: '#fafafa', borderRadius: 6 }}>
+          <Typography.Text type="secondary">등록된 사업장이 없습니다. '사업장 등록'으로 추가하세요.</Typography.Text>
+        </div>
+      ) : (
+        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+          {businesses.map((biz: Business) => (
+            <Card key={biz.id} size="small">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                <ShopOutlined style={{ color: '#1677ff' }} />
+                <Typography.Text strong style={{ fontSize: 15 }}>
+                  {biz.name}
+                </Typography.Text>
+                <Tag color={biz.is_visible ? 'green' : 'default'}>{biz.is_visible ? '노출' : '숨김'}</Tag>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {biz.address}
+                  {biz.address_detail ? ` ${biz.address_detail}` : ''}
+                </Typography.Text>
+                <Button size="small" icon={<EditOutlined />} style={{ marginLeft: 'auto' }} onClick={() => openEdit(biz)}>
+                  사업장 수정
+                </Button>
+              </div>
+              <BusinessProductsTable businessId={biz.id} />
+            </Card>
+          ))}
+        </Space>
+      )}
+
+      <Modal
+        title={editing ? '사업장 수정' : '사업장 등록'}
+        open={modalOpen}
+        onOk={handleSubmit}
+        onCancel={() => {
+          setModalOpen(false)
+          bizForm.resetFields()
+          setEditing(null)
+        }}
+        confirmLoading={saveMutation.isPending}
+        okText={editing ? '저장' : '등록'}
+        cancelText="취소"
+        destroyOnClose
+      >
+        <Form form={bizForm} layout="vertical">
+          <Form.Item name="name" label="사업장명" rules={[{ required: true, message: '사업장명을 입력하세요' }]}>
+            <Input placeholder="예: 아이키친 용인동백점" />
+          </Form.Item>
+          <Form.Item name="is_visible" label="노출 여부" valuePropName="checked">
+            <Switch checkedChildren="노출" unCheckedChildren="숨김" />
+          </Form.Item>
+          <Space>
+            <Form.Item name="zipcode" label="우편번호">
+              <Input style={{ width: 120 }} />
+            </Form.Item>
+            <Form.Item name="region" label="지역">
+              <Input style={{ width: 180 }} placeholder="예: 경기 용인시" />
+            </Form.Item>
+          </Space>
+          <Form.Item name="address" label="주소">
+            <Input placeholder="도로명 주소" />
+          </Form.Item>
+          <Form.Item name="address_detail" label="상세주소">
+            <Input placeholder="건물명, 층, 호수 등" />
+          </Form.Item>
+          <Form.Item name="contact_phone" label="연락처">
+            <Input style={{ width: 200 }} placeholder="사업장 연락처" />
+          </Form.Item>
+          <Form.Item name="intro" label="소개">
+            <Input.TextArea rows={2} placeholder="사업장 소개" />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </>
   )
 }
 
