@@ -1811,6 +1811,10 @@ export type Database = {
     }
     Functions: {
       auto_complete_reservations: { Args: never; Returns: number }
+      change_admin_password: {
+        Args: { p_current_password: string; p_new_password: string }
+        Returns: boolean
+      }
       check_reservation_available: {
         Args: { p_product_id: string; p_reserved_date: string }
         Returns: Json

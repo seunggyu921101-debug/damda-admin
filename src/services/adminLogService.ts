@@ -162,6 +162,7 @@ export const ACTION_LABELS: Record<AdminLogAction, string> = {
 
 // 대상 유형 라벨
 export const TARGET_TYPE_LABELS: Record<AdminLogTargetType, string> = {
+  admin: '관리자',
   business_owner: '사업주',
   daycare: '어린이집',
   product: '상품',

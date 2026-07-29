@@ -1,6 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Layout, Menu, theme, Avatar, Dropdown, type MenuProps } from 'antd'
+import { Layout, Menu, theme, Avatar, Dropdown, Modal, Form, Input, message, type MenuProps } from 'antd'
 import {
   DashboardOutlined,
   ShopOutlined,
@@ -15,13 +15,22 @@ import {
   FileTextOutlined,
   SettingOutlined,
   LogoutOutlined,
+  LockOutlined,
   FormOutlined,
 } from '@ant-design/icons'
 import { useUIStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/authStore'
 import { logLogout } from '@/services/adminLogService'
+import { changeAdminPassword } from '@/services/adminPasswordService'
+import { supabase } from '@/lib/supabase'
 
 const { Sider, Content } = Layout
+
+interface PasswordChangeFormValues {
+  currentPassword: string
+  newPassword: string
+  confirmPassword: string
+}
 
 // 메뉴 아이템 정의
 const menuItems: MenuProps['items'] = [
@@ -140,6 +149,9 @@ export function AdminLayout() {
   const location = useLocation()
   const { sidebarCollapsed } = useUIStore()
   const { admin, isAuthenticated, isSessionValid, logout } = useAuthStore()
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false)
+  const [passwordChanging, setPasswordChanging] = useState(false)
+  const [passwordForm] = Form.useForm<PasswordChangeFormValues>()
   const {
     token: { borderRadiusLG },
   } = theme.useToken()
@@ -166,6 +178,11 @@ export function AdminLayout() {
       label: '프로필',
     },
     {
+      key: 'change-password',
+      icon: <LockOutlined />,
+      label: '비밀번호 변경',
+    },
+    {
       type: 'divider',
     },
     {
@@ -177,11 +194,44 @@ export function AdminLayout() {
   ]
 
   const handleUserMenuClick: MenuProps['onClick'] = async ({ key }) => {
+    if (key === 'change-password') {
+      setPasswordModalOpen(true)
+      return
+    }
+
     if (key === 'logout') {
       // 로그아웃 활동 로그 기록 (로그아웃 전에 기록해야 adminId를 가져올 수 있음)
       await logLogout()
       logout()
       navigate('/login')
+    }
+  }
+
+  const handlePasswordModalClose = () => {
+    if (passwordChanging) return
+    passwordForm.resetFields()
+    setPasswordModalOpen(false)
+  }
+
+  const handlePasswordChange = async (values: PasswordChangeFormValues) => {
+    setPasswordChanging(true)
+
+    try {
+      await changeAdminPassword({
+        currentPassword: values.currentPassword,
+        newPassword: values.newPassword,
+      })
+
+      message.success('비밀번호가 변경되었습니다. 새 비밀번호로 다시 로그인해주세요.')
+      passwordForm.resetFields()
+      setPasswordModalOpen(false)
+      await supabase.auth.signOut()
+      logout()
+      navigate('/login', { replace: true })
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '비밀번호 변경에 실패했습니다.')
+    } finally {
+      setPasswordChanging(false)
     }
   }
 
@@ -287,6 +337,64 @@ export function AdminLayout() {
           <Outlet />
         </Content>
       </Layout>
+      <Modal
+        title="비밀번호 변경"
+        open={passwordModalOpen}
+        okText="변경하기"
+        cancelText="취소"
+        confirmLoading={passwordChanging}
+        onOk={() => passwordForm.submit()}
+        onCancel={handlePasswordModalClose}
+        destroyOnHidden
+      >
+        <Form
+          form={passwordForm}
+          layout="vertical"
+          onFinish={handlePasswordChange}
+          requiredMark={false}
+        >
+          <Form.Item
+            name="currentPassword"
+            label="현재 비밀번호"
+            rules={[{ required: true, message: '현재 비밀번호를 입력해주세요.' }]}
+          >
+            <Input.Password prefix={<LockOutlined />} autoComplete="current-password" />
+          </Form.Item>
+          <Form.Item
+            name="newPassword"
+            label="새 비밀번호"
+            extra="8자 이상, 영문·숫자·특수문자를 모두 포함해주세요."
+            rules={[
+              { required: true, message: '새 비밀번호를 입력해주세요.' },
+              { min: 8, message: '새 비밀번호는 8자 이상이어야 합니다.' },
+              {
+                pattern: /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z\d]).+$/,
+                message: '영문, 숫자, 특수문자를 모두 포함해주세요.',
+              },
+            ]}
+          >
+            <Input.Password prefix={<LockOutlined />} autoComplete="new-password" />
+          </Form.Item>
+          <Form.Item
+            name="confirmPassword"
+            label="새 비밀번호 확인"
+            dependencies={['newPassword']}
+            rules={[
+              { required: true, message: '새 비밀번호를 한 번 더 입력해주세요.' },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || getFieldValue('newPassword') === value) {
+                    return Promise.resolve()
+                  }
+                  return Promise.reject(new Error('새 비밀번호가 일치하지 않습니다.'))
+                },
+              }),
+            ]}
+          >
+            <Input.Password prefix={<LockOutlined />} autoComplete="new-password" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </Layout>
   )
 }

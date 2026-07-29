@@ -806,6 +806,7 @@ export interface SiteSetting {
 // 관리자 활동 로그 타입
 export type AdminLogAction = 'create' | 'update' | 'delete' | 'status_change' | 'login' | 'logout'
 export type AdminLogTargetType =
+  | 'admin'
   | 'business_owner'
   | 'daycare'
   | 'product'
