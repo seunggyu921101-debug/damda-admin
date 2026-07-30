@@ -60,7 +60,8 @@ export function VendorForm({
   const [isPostcodeOpen, setIsPostcodeOpen] = useState(false)
   const [documents, setDocuments] = useState<BusinessOwnerDocument[]>([])
   const [documentsLoading, setDocumentsLoading] = useState(false)
-  const [uploadingType, setUploadingType] = useState<BusinessOwnerDocumentType | null>(null)
+  const [documentUploadCount, setDocumentUploadCount] = useState(0)
+  const documentsUploading = documentUploadCount > 0
 
   const isEdit = mode === 'edit'
 
@@ -127,7 +128,7 @@ export function VendorForm({
       return false
     }
 
-    setUploadingType(documentType)
+    setDocumentUploadCount((count) => count + 1)
     try {
       const result = await uploadVendorDocument(file, vendorId, documentType)
       await addVendorDocument({
@@ -138,12 +139,12 @@ export function VendorForm({
         file_size: result.fileSize,
         mime_type: result.mimeType,
       })
-      message.success('파일이 업로드되었습니다')
+      message.success(`${file.name} 파일이 업로드되었습니다`)
       await loadDocuments()
     } catch (error) {
       message.error('업로드에 실패했습니다')
     } finally {
-      setUploadingType(null)
+      setDocumentUploadCount((count) => Math.max(0, count - 1))
     }
     return false
   }
@@ -436,14 +437,15 @@ export function VendorForm({
                     showUploadList={false}
                     beforeUpload={(file) => handleDocumentUpload(file, 'other')}
                     accept=".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx,.xls,.xlsx"
-                    disabled={uploadingType !== null}
+                    multiple
+                    disabled={documentsUploading}
                   >
-                    <Button icon={<UploadOutlined />} loading={uploadingType !== null}>
+                    <Button icon={<UploadOutlined />} loading={documentsUploading}>
                       파일 업로드
                     </Button>
                   </Upload>
                   <Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>
-                    JPG, PNG, PDF, DOC, XLS (최대 20MB)
+                    여러 파일 선택 가능 · JPG, PNG, PDF, DOC, XLS (파일당 최대 20MB)
                   </Text>
                 </div>
 

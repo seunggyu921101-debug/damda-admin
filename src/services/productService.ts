@@ -12,6 +12,30 @@ import type {
   BusinessOwner,
 } from '@/types'
 
+export const MAX_PRODUCTS_PER_BUSINESS_OWNER = 10
+export const MAX_PRODUCT_DETAIL_IMAGES = 5
+
+async function ensureBusinessOwnerCanAddProduct(businessOwnerId: string): Promise<void> {
+  const { count, error } = await supabase
+    .from('products')
+    .select('id', { count: 'exact', head: true })
+    .eq('business_owner_id', businessOwnerId)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  if ((count ?? 0) >= MAX_PRODUCTS_PER_BUSINESS_OWNER) {
+    throw new Error(`사업주별 상품은 최대 ${MAX_PRODUCTS_PER_BUSINESS_OWNER}개까지 등록할 수 있습니다`)
+  }
+}
+
+function ensureProductImageLimit(images?: string[]): void {
+  if (images && images.length > MAX_PRODUCT_DETAIL_IMAGES) {
+    throw new Error(`상품 상세 이미지는 최대 ${MAX_PRODUCT_DETAIL_IMAGES}장까지 등록할 수 있습니다`)
+  }
+}
+
 // 상품 목록 조회
 export async function getProducts(
   params: PaginationParams & ProductFilter
@@ -123,6 +147,9 @@ export async function getProduct(id: string): Promise<Product> {
 export async function createProduct(input: ProductCreateInput): Promise<Product> {
   const { options, images, available_time_slots, unavailable_dates, ...productData } = input
 
+  ensureProductImageLimit(images)
+  await ensureBusinessOwnerCanAddProduct(productData.business_owner_id)
+
   // 상품 생성
   const { data: product, error: productError } = await supabase
     .from('products')
@@ -207,6 +234,8 @@ export async function createProduct(input: ProductCreateInput): Promise<Product>
 // 상품 수정
 export async function updateProduct(id: string, input: ProductUpdateInput): Promise<Product> {
   const { options, images, available_time_slots, unavailable_dates, ...productData } = input
+
+  ensureProductImageLimit(images)
 
   // 변경 전 데이터 조회
   const { data: beforeData } = await supabase

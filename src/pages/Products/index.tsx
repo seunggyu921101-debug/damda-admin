@@ -311,7 +311,7 @@ export function ProductsPage() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h2 style={{ margin: 0 }}>상품 관리</h2>
+        <h2 style={{ margin: 0 }}>업체 관리</h2>
         <div style={{ display: 'flex', gap: 8 }}>
           <Dropdown menu={{ items: downloadMenuItems }} placement="bottomRight">
             <Button icon={<DownloadOutlined />}>엑셀 다운로드</Button>

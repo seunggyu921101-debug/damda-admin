@@ -41,7 +41,12 @@ import type { UploadProps } from 'antd/es/upload'
 import type { RcFile } from 'antd/es/upload/interface'
 import dayjs from 'dayjs'
 
-import { getBusinessOwners, getCategories } from '@/services/productService'
+import {
+  getBusinessOwners,
+  getCategories,
+  MAX_PRODUCT_DETAIL_IMAGES,
+  MAX_PRODUCTS_PER_BUSINESS_OWNER,
+} from '@/services/productService'
 import { uploadProductImage, uploadImage } from '@/services/storageService'
 import { REGION_CASCADER_OPTIONS, DAY_OF_WEEK_LABEL, TIME_SLOT_INTERVAL_OPTIONS } from '@/constants'
 import type { Product, TimeSlot, TimeSlotMode, TimeSlotInterval, Category } from '@/types'
@@ -183,7 +188,8 @@ export function ProductForm({
   const [imageUrls, setImageUrls] = useState<string[]>(
     initialValues?.images?.map((img) => img.image_url) || []
   )
-  const [imageUploading, setImageUploading] = useState(false)
+  const [imageUploadCount, setImageUploadCount] = useState(0)
+  const imageUploading = imageUploadCount > 0
 
   // 옵션
   const [options, setOptions] = useState<OptionItem[]>(
@@ -278,17 +284,31 @@ export function ProductForm({
 
   // 추가 이미지 업로드 (다중)
   const handleImageUpload: UploadProps['customRequest'] = async ({ file, onSuccess, onError }) => {
-    setImageUploading(true)
+    setImageUploadCount((count) => count + 1)
     try {
       const url = await uploadProductImage(file as RcFile, productId)
-      setImageUrls((prev) => [...prev, url])
+      setImageUrls((prev) => [...prev, url].slice(0, MAX_PRODUCT_DETAIL_IMAGES))
       onSuccess?.({})
     } catch (error) {
       message.error('이미지 업로드에 실패했습니다')
       onError?.(error as Error)
     } finally {
-      setImageUploading(false)
+      setImageUploadCount((count) => Math.max(0, count - 1))
     }
+  }
+
+  const validateImageSelection: UploadProps['beforeUpload'] = (file, fileList) => {
+    const remaining = MAX_PRODUCT_DETAIL_IMAGES - imageUrls.length
+    const selectedIndex = fileList.findIndex((selectedFile) => selectedFile.uid === file.uid)
+
+    if (selectedIndex >= remaining) {
+      if (selectedIndex === remaining) {
+        message.warning(`상품 상세 이미지는 최대 ${MAX_PRODUCT_DETAIL_IMAGES}장까지 등록할 수 있습니다`)
+      }
+      return Upload.LIST_IGNORE
+    }
+
+    return true
   }
 
   // 이미지 삭제
@@ -571,6 +591,7 @@ export function ProductForm({
           <Form.Item
             name="business_owner_id"
             label="사업주"
+            extra={`사업주별 상품은 최대 ${MAX_PRODUCTS_PER_BUSINESS_OWNER}개까지 등록할 수 있습니다`}
             rules={[{ required: true, message: '사업주를 선택하세요' }]}
           >
             <Select
@@ -757,7 +778,7 @@ export function ProductForm({
           <SectionHeader
             icon={<PictureOutlined />}
             title="이미지"
-            description="썸네일은 필수입니다. 추가 이미지는 최대 10장까지 등록할 수 있습니다."
+            description={`썸네일은 필수입니다. 상세 이미지는 최대 ${MAX_PRODUCT_DETAIL_IMAGES}장까지 등록할 수 있습니다.`}
           />
 
           <Form.Item label="썸네일" required extra="권장 크기: 800x800px">
@@ -782,7 +803,7 @@ export function ProductForm({
             </Upload>
           </Form.Item>
 
-          <Form.Item label="추가 이미지" extra="상품 상세페이지에 표시됩니다">
+          <Form.Item label="추가 이미지" extra="여러 장을 한 번에 선택할 수 있으며 상품 상세페이지에 표시됩니다">
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {imageUrls.map((url, index) => (
                 <div
@@ -816,11 +837,12 @@ export function ProductForm({
                   />
                 </div>
               ))}
-              {imageUrls.length < 10 && (
+              {imageUrls.length < MAX_PRODUCT_DETAIL_IMAGES && (
                 <Upload
                   listType="picture-card"
                   showUploadList={false}
                   customRequest={handleImageUpload}
+                  beforeUpload={validateImageSelection}
                   accept="image/*"
                   multiple
                 >
