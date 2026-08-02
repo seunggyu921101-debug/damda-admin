@@ -6,8 +6,8 @@ import type { UploadProps, RcFile } from 'antd/es/upload'
 import { uploadVendorLogo } from '@/services/storageService'
 
 interface LogoUploadProps {
-  value?: string
-  onChange?: (url: string | undefined) => void
+  value?: string | null
+  onChange?: (url: string | null) => void
   vendorId?: string
 }
 
@@ -35,7 +35,7 @@ export function LogoUpload({ value, onChange, vendorId }: LogoUploadProps) {
       const url = await uploadVendorLogo(file, vendorId)
       onChange?.(url)
       message.success('로고가 업로드되었습니다')
-    } catch (error) {
+    } catch {
       message.error('업로드에 실패했습니다')
     } finally {
       setLoading(false)
@@ -43,7 +43,10 @@ export function LogoUpload({ value, onChange, vendorId }: LogoUploadProps) {
   }
 
   const handleRemove = () => {
-    onChange?.(undefined)
+    // `undefined` fields are omitted from Supabase update payloads, so the
+    // existing logo URL would remain in the database. Use `null` to explicitly
+    // clear the nullable logo_url column when the form is saved.
+    onChange?.(null)
   }
 
   return (

@@ -94,7 +94,7 @@ export interface BusinessOwnerCreateInput {
   bank_account?: string
   bank_holder?: string
   tax_email?: string
-  logo_url?: string
+  logo_url?: string | null
   commission_rate?: number
 }
 
@@ -111,7 +111,7 @@ export interface BusinessOwnerUpdateInput {
   bank_account?: string
   bank_holder?: string
   tax_email?: string
-  logo_url?: string
+  logo_url?: string | null
   status?: VendorStatus
 }
 
